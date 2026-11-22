@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 150" role="img" aria-labelledby="t">
+<title id="t">Cathode Online Server Solutions, founded by Pooks</title>
+<defs>
+ <linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="260" y2="0" spreadMethod="repeat">
+  <stop offset="0" stop-color="#ffb000"/><stop offset=".5" stop-color="#38e8a0"/><stop offset="1" stop-color="#ffb000"/>
+  <animateTransform attributeName="gradientTransform" type="translate" from="0 0" to="260 0" dur="6s" repeatCount="indefinite"/>
+ </linearGradient>
+</defs>
+<style>
+ .l path{fill:none;stroke:url(#g);stroke-width:6;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1;animation:d .7s ease-out forwards}
+ .l path:nth-child(1){animation-delay:.05s}.l path:nth-child(2){animation-delay:.17s}.l path:nth-child(3){animation-delay:.29s}.l path:nth-child(4){animation-delay:.41s}
+ .l path:nth-child(5){animation-delay:.53s}.l path:nth-child(6){animation-delay:.65s}.l path:nth-child(7){animation-delay:.77s}
+ @keyframes d{to{stroke-dashoffset:0}}
+ .mk rect{fill:none;stroke:url(#g);stroke-width:5;stroke-linejoin:round}
+ .mk .led,.mk .led2{stroke:none}
+ .led{fill:#38e8a0;animation:b 1.4s steps(2) infinite}.led2{fill:#ffb000;animation:b 1.4s steps(2) .7s infinite}
+ @keyframes b{50%{opacity:.2}}
+ text{font-family:ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace;fill:#ffb000}
+ .sub{font-size:19px;font-weight:700;animation:f 1s ease-out .9s both}.tag{font-size:12px;fill:#38e8a0;animation:f 1s ease-out 1.2s both}
+ .rule{stroke:url(#g);stroke-width:2;animation:f 1s ease-out 1.2s both}
+ @keyframes f{from{opacity:0}to{opacity:1}}
+ @media (prefers-reduced-motion:reduce){*{animation:none!important}.l path{stroke-dashoffset:0}}
+</style>
+<g class="mk">
+ <rect x="4" y="6" width="64" height="16" rx="3"/><rect x="4" y="30" width="64" height="16" rx="3"/><rect x="4" y="54" width="64" height="16" rx="3"/>
+ <rect class="led" x="12" y="12" width="5" height="4"/><rect class="led2" x="12" y="36" width="5" height="4"/><rect class="led" x="12" y="60" width="5" height="4"/>
+</g>
+<g class="l" transform="translate(92 6)">
+ <path pathLength="1" d="M36 14 Q32 4 20 4 Q6 4 6 18 V42 Q6 56 20 56 Q32 56 36 46"/>
+ <path pathLength="1" transform="translate(52 0)" d="M4 56 L20 4 L36 56 M10 38 H30"/>
+ <path pathLength="1" transform="translate(104 0)" d="M2 4 H38 M20 4 V56"/>
+ <path pathLength="1" transform="translate(156 0)" d="M6 4 V56 M34 4 V56 M6 30 H34"/>
+ <path pathLength="1" transform="translate(208 0)" d="M20 4 Q6 4 6 18 V42 Q6 56 20 56 Q34 56 34 42 V18 Q34 4 20 4 Z"/>
+ <path pathLength="1" transform="translate(260 0)" d="M6 4 V56 H18 Q34 56 34 42 V18 Q34 4 18 4 H6"/>
+ <path pathLength="1" transform="translate(312 0)" d="M36 4 H6 V56 H36 M6 30 H30"/>
+</g>
+<text class="sub" x="96" y="100" textLength="348" lengthAdjust="spacing">ONLINE SERVER SOLUTIONS</text>
+<line class="rule" x1="96" x2="170" y1="122" y2="122"/>
+<text class="tag" x="180" y="126" textLength="176" lengthAdjust="spacing">FOUNDED BY POOKS</text>
+<line class="rule" x1="366" x2="444" y1="122" y2="122"/>
+</svg>
