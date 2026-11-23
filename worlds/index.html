@@ -113,7 +113,7 @@ function render(){
  if(!all.length){$('sub').textContent='No samples yet.';return}
  var last=all[all.length-1],m=D.meta||{},first=Sx[0]||last;
  $('sub').textContent='World version '+(m.version||'?')+' · updated '+(m.updated?new Date(m.updated).toLocaleDateString():'?')+' · '+all.length+' samples';
- var age=Math.round((now-last[0]*1000)/60000),ok=age<75&&!D.warning;
+ var age=Math.round((now-last[0]*1000)/60000),ok=age<20&&!D.warning;
  $('pill').innerHTML='<span class="dot'+(ok?'':' bad')+'"></span>'+(ok?'Logging':'Not logging')+' · last sample '+(age<90?age+' min':Math.round(age/60)+' h')+' ago';
  $('warn').hidden=!D.warning;$('warn').textContent=D.warning||'';
  var pl=function(r){return r[5]+r[6]},plv=S.map(pl),T=function(i){return Sx.map(function(r){return[r[0],r[i]]})};
@@ -144,23 +144,28 @@ function render(){
  $('c_hm').innerHTML=svg(W,H,out);
  $('dt').textContent='Data table ('+S.length+' samples in range)';
  $('rows').innerHTML=S.slice(-300).reverse().map(function(r){return'<tr><td>'+fdt(r[0]*1000)+'</td><td>'+fmt(r[1])+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td>'+r[4]+'</td><td>'+r[5]+'</td><td>'+r[6]+'</td></tr>'}).join('');
- $('foot').textContent='Collected every 30 minutes by this server from the VRChat API. All times are your local time. New visits are the change in total visits between consecutive samples, credited to the later one, so visits from a stretch when the server was off appear in the first sample afterwards. Nothing on this page loads from the internet.'}
+ $('foot').textContent='Collected every 5 minutes by this server from the VRChat API; history before this server started was added from an earlier log. All times are your local time. New visits are the change in total visits between consecutive samples, credited to the later one, so visits from a stretch with no samples appear in the first sample afterwards. The public copy of this page reloads its data from GitHub every minute (GitHub may delay it a few minutes).'}
 function buttons(){$('rng').innerHTML=Object.keys(RH).map(function(k){return'<button data-r="'+k+'" class="'+(k==RANGE?'on':'')+'">'+k+'</button>'}).join(' ');
  Array.prototype.forEach.call($('rng').children,function(b){b.onclick=function(){RANGE=b.dataset.r;try{localStorage.setItem('tr',RANGE)}catch(e){}buttons();render()}})}
 function theme(){if(THEME=='auto')document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme',THEME);$('th').textContent='Theme: '+THEME}
 $('th').onclick=function(){THEME={auto:'dark',dark:'light',light:'auto'}[THEME];try{localStorage.setItem('tt',THEME)}catch(e){}theme();if(D)render()};
 var WID=new URLSearchParams(location.search).get('w')||localStorage.getItem('tw')||'';
-function load(){fetch('index.json?'+Date.now()).then(function(r){return r.json()}).then(function(ix){
+/* Public (https) copy reads the live files from the repo's `data` branch (updated every 5 min, no site rebuild); falls back to the published copy. */
+var RAW='https://raw.githubusercontent.com/Cathode-Online/cathode-online.github.io/data/worlds/',PUB=location.protocol==='https:';
+function getj(p){var q=PUB?Math.floor(Date.now()/60000):Date.now();
+ var f=function(u){return fetch(u+'?'+q).then(function(r){if(!r.ok)throw 0;return r.json()})};
+ return PUB?f(RAW+p).catch(function(){return f(p)}):f(p)}
+function load(){getj('index.json').then(function(ix){
   if(!ix.length){$('sub').textContent='No worlds tracked yet.';return}
   if(!ix.some(function(w){return w.id==WID}))WID=ix[0].id;
   var sel=$('wsel');sel.hidden=ix.length<2;sel.innerHTML=ix.map(function(w){return'<option value="'+w.id+'"'+(w.id==WID?' selected':'')+'>'+w.name.replace(/</g,'&lt;')+'</option>'}).join('');
   sel.onchange=function(){WID=sel.value;try{localStorage.setItem('tw',WID)}catch(e){}history.replaceState(0,'','?w='+WID);load()};
-  return fetch('data/'+WID+'.json?'+Date.now()).then(function(r){return r.json()}).then(function(d){D=d;$('h1').textContent=(d.meta&&d.meta.name||'World').toUpperCase();document.title=$('h1').textContent+' stats';render()})
+  return getj('data/'+WID+'.json').then(function(d){D=d;$('h1').textContent=(d.meta&&d.meta.name||'World').toUpperCase();document.title=$('h1').textContent+' stats';render()})
  }).catch(function(e){$('sub').textContent='Could not load data'})}
 if(location.protocol==='https:')$('scan').hidden=true; /* public Funnel copy is read-only */
 $('scan').onclick=function(){var b=$('scan');b.disabled=true;b.textContent='Scanning…';
  fetch('http://'+location.hostname+':8765/scan-world',{method:'POST'}).then(function(r){return r.text().then(function(t){if(!r.ok)throw new Error(t);return t})})
  .then(function(){b.textContent='Updated';load()}).catch(function(e){b.textContent=/^Wait/.test(e.message)?e.message:'Scan failed'})
  .then(function(){setTimeout(function(){b.disabled=false;b.textContent='Scan now'},4000)})};
-theme();buttons();load();setInterval(load,15*60e3);window.addEventListener('resize',function(){});
+theme();buttons();load();setInterval(load,60e3);window.addEventListener('resize',function(){});
 </script></body></html>
