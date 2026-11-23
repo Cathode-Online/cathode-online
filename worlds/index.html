@@ -45,14 +45,29 @@ button:hover{background:var(--fg);color:var(--bg)}
 .t .v{text-shadow:0 0 10px currentColor;letter-spacing:.04em}
 .dot{border-radius:0;animation:bl 1.2s steps(2) infinite}@keyframes bl{50%{opacity:.25}}
 #warn{background:transparent;color:#ff4d2e;border:1px solid #ff4d2e;text-transform:uppercase}
+#relog{color:#ff4d2e;border:1px solid #ff4d2e;padding:12px;margin-bottom:12px}#relog input{background:var(--card);color:var(--fg);border:1px solid var(--line);padding:6px;font:inherit}#relog small{color:var(--mut)}
 footer:before{content:"-- end of log --";display:block;margin-bottom:6px;opacity:.6}
-@media(prefers-reduced-motion:reduce){.dot{animation:none}}</style></head><body><main>
+@media(prefers-reduced-motion:reduce){.dot{animation:none}}
+#tip{position:fixed;pointer-events:none;z-index:10;display:none;background:var(--card);color:var(--fg);border:1px solid var(--fg);padding:8px 10px;font:12px ui-monospace,"Cascadia Mono",Consolas,monospace;box-shadow:0 0 14px rgba(0,0,0,.45);max-width:90vw}
+#tip .t{font-weight:700;margin-bottom:4px;color:var(--mut)}#tip .r{display:flex;justify-content:space-between;gap:14px}#tip .sw{display:inline-block;width:10px;height:10px;margin-right:6px}
+.box svg:focus-visible{outline:1px dashed var(--fg)}</style></head><body><main>
 <header>
  <div><a class="home" href="../" style="color:var(--mut);font-size:.72rem;text-decoration:none;letter-spacing:.1em">&lt; HOME</a><h1 id="h1">World stats</h1><div class="sub" id="sub">Loading…</div></div>
  <div class="ctl"><select id="wsel" hidden style="background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px"></select><span class="pill" id="pill"></span><button id="scan">Scan now</button>
   <span id="rng"></span><button id="th">Theme: auto</button></div>
 </header>
 <div id="warn" hidden></div>
+<div id="relog" hidden><b>RELOGIN REQUIRED</b> <span id="rlmsg">Live player counts are paused until the VRChat login is renewed. Visits are still being recorded.</span>
+ <div id="rlform" hidden style="margin-top:10px">
+  <small>Press the button to sign in with the saved login (VRChat will email a code). Or type a different username and password.</small>
+  <p style="display:grid;gap:8px;max-width:340px;margin:8px 0">
+   <input id="rlu" placeholder="Username (optional)" autocomplete="off" autocapitalize="off">
+   <input id="rlp" type="password" placeholder="Password (optional)" autocomplete="off">
+   <input id="rlc" placeholder="Login code" autocomplete="off" inputmode="numeric" style="display:none">
+   <span><button id="rlb">Sign in</button> <small id="rlm"></small></span>
+  </p>
+ </div>
+</div>
 <section class="tiles" id="tiles"></section>
 <section class="box"><h2>Total visits over time</h2><div class="s">All-time visit count at each sample.</div><div id="c_visits"></div></section>
 <section class="row">
@@ -77,7 +92,50 @@ function fdt(t){var d=new Date(t);return d.toLocaleDateString(undefined,{month:'
 function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
 function svg(w,h,inner){return '<svg viewBox="0 0 '+w+' '+h+'" width="100%" preserveAspectRatio="none" style="display:block">'+inner+'</svg>'}
 function nice(m){if(m<=0)return 1;var p=Math.pow(10,Math.floor(Math.log10(m))),f=m/p;return (f<=1?1:f<=2?2:f<=5?5:10)*p}
-/* line chart: series=[{pts:[[t,y]],color,area,step}] */
+/* ---- hover tooltips: one shared box; handlers are re-attached every time a chart is drawn ---- */
+var tip=document.createElement('div');tip.id='tip';tip.setAttribute('role','status');tip.setAttribute('aria-live','polite');document.body.appendChild(tip);
+function showTip(html,cx,cy){tip.innerHTML=html;tip.style.display='block';var w=tip.offsetWidth,h=tip.offsetHeight,l=cx+14,t=cy+14;
+ if(l+w>innerWidth-8)l=cx-w-14;if(t+h>innerHeight-8)t=cy-h-14;tip.style.left=Math.max(8,l)+'px';tip.style.top=Math.max(8,t)+'px'}
+function hideTip(){tip.style.display='none'}
+addEventListener('scroll',hideTip,{passive:true});
+function trow(c,n,v){return '<div class="r"><span>'+(c?'<i class="sw" style="background:'+c+'"></i>':'')+n+'</span><b>'+v+'</b></div>'}
+var NS='http://www.w3.org/2000/svg';
+function mk(tag,at,par){var e=document.createElementNS(NS,tag);for(var k in at)e.setAttribute(k,at[k]);par.appendChild(e);return e}
+function ftime(t){return new Date(t).toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}
+function h12l(h){return (h%12||12)+(h<12?' AM':' PM')}
+function toLocal(sv,cx,cy){var p=sv.createSVGPoint();p.x=cx;p.y=cy;return p.matrixTransform(sv.getScreenCTM().inverse())}
+function toScreen(sv,x,y){var p=sv.createSVGPoint();p.x=x;p.y=y;return p.matrixTransform(sv.getScreenCTM())}
+function nearestIdx(pts,t){var a=0,b=pts.length-1;while(b-a>1){var m=(a+b)>>1;if(pts[m][0]<t)a=m;else b=m}return Math.abs(pts[a][0]-t)<=Math.abs(pts[b][0]-t)?a:b}
+function hoverLine(sv,o){var P=o.series.filter(function(s){return s.pts.length});if(!P.length)return;
+ var pl=o.plot,cross=mk('line',{y1:pl.top,y2:pl.top+pl.height,stroke:css('--mut'),'stroke-width':1,'vector-effect':'non-scaling-stroke',visibility:'hidden'},sv),
+  dots=P.map(function(s){return mk('ellipse',{fill:s.color,stroke:css('--bg'),'stroke-width':2,'vector-effect':'non-scaling-stroke',visibility:'hidden'},sv)}),
+  hit=mk('rect',{x:pl.left,y:pl.top,width:pl.width,height:pl.height,fill:'transparent'},sv),cur=-1,pts0=P[0].pts;
+ function show(i,cx,cy){cur=i;var t=pts0[i][0],x=o.xOf(t),m=sv.getScreenCTM(),html='<div class="t">'+ftime(t)+'</div>';
+  cross.setAttribute('x1',x);cross.setAttribute('x2',x);cross.setAttribute('visibility','visible');
+  P.forEach(function(s,k){var p=s.pts[nearestIdx(s.pts,t)];dots[k].setAttribute('cx',o.xOf(p[0]));dots[k].setAttribute('cy',o.yOf(p[1]));
+   dots[k].setAttribute('rx',4/m.a);dots[k].setAttribute('ry',4/m.d);dots[k].setAttribute('visibility','visible');
+   html+=trow(s.color,s.name||'Value',s.fmt?s.fmt(p):fmt(p[1]))});
+  if(cx===undefined){var sc=toScreen(sv,x,o.yOf(pts0[i][1]));cx=sc.x;cy=sc.y}
+  showTip(html,cx,cy)}
+ function hide(){cross.setAttribute('visibility','hidden');dots.forEach(function(d){d.setAttribute('visibility','hidden')});hideTip()}
+ hit.addEventListener('mousemove',function(e){var l=toLocal(sv,e.clientX,e.clientY);show(nearestIdx(pts0,o.x0+(l.x-pl.left)/pl.width*(o.x1-o.x0)),e.clientX,e.clientY)});
+ hit.addEventListener('mouseleave',hide);
+ sv.setAttribute('tabindex','0');
+ sv.addEventListener('keydown',function(e){if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;e.preventDefault();
+  show(Math.max(0,Math.min(pts0.length-1,cur<0?pts0.length-1:cur+(e.key==='ArrowRight'?1:-1))))});
+ sv.addEventListener('blur',hide)}
+function hoverBars(sv,o){var pl=o.plot,wash=mk('rect',{y:pl.top,height:pl.height,fill:css('--fg'),opacity:.1,visibility:'hidden'},sv),cur=-1;
+ function show(i,cx,cy){cur=i;var b=o.bars[i];wash.setAttribute('x',b.x);wash.setAttribute('width',b.w);wash.setAttribute('visibility','visible');
+  if(cx===undefined){var sc=toScreen(sv,b.x+b.w/2,pl.top+pl.height/2);cx=sc.x;cy=sc.y}
+  showTip('<div class="t">'+b.title+'</div>'+trow(null,o.unit,fmt(b.v)),cx,cy)}
+ function hide(){wash.setAttribute('visibility','hidden');hideTip()}
+ o.bars.forEach(function(b,i){var h=mk('rect',{x:b.x,y:pl.top,width:b.w,height:pl.height,fill:'transparent'},sv);
+  h.addEventListener('mousemove',function(e){show(i,e.clientX,e.clientY)});h.addEventListener('mouseleave',hide)});
+ sv.setAttribute('tabindex','0');
+ sv.addEventListener('keydown',function(e){if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;e.preventDefault();
+  show(Math.max(0,Math.min(o.bars.length-1,cur<0?o.bars.length-1:cur+(e.key==='ArrowRight'?1:-1))))});
+ sv.addEventListener('blur',hide)}
+/* line chart: series=[{pts:[[t,y]],color,area,step,name,fmt}] */
 function line(el,series,o){o=o||{};var W=480,H=o.h||170,L=34,R=8,T=8,B=20,all=[],i,s;
  series.forEach(function(s){all=all.concat(s.pts)});
  if(!all.length){$(el).innerHTML='<div class="s">No data yet.</div>';return}
@@ -94,25 +152,29 @@ function line(el,series,o){o=o||{};var W=480,H=o.h||170,L=34,R=8,T=8,B=20,all=[]
    if(s.area&&g.length>1)out+='<path d="'+d+'L'+X(g[g.length-1][0])+','+Y(y0)+'L'+X(g[0][0])+','+Y(y0)+'Z" fill="'+s.color+'" opacity=".15"/>';
    if(g.length==1)out+='<circle cx="'+X(g[0][0])+'" cy="'+Y(g[0][1])+'" r="2.5" fill="'+s.color+'"/>';
    else out+='<path d="'+d+'" fill="none" stroke="'+s.color+'" stroke-width="1.6"/>'})});
- $(el).innerHTML=svg(W,H,out)}
+ $(el).innerHTML=svg(W,H,out);
+ hoverLine($(el).firstChild,{plot:{left:L,top:T,width:W-L-R,height:H-T-B},series:series,xOf:X,yOf:Y,x0:x0,x1:x1})}
 function bars(el,labels,vals,o){o=o||{};var W=480,H=150,L=28,R=6,T=14,B=18,n=vals.length,m=nice(Math.max.apply(0,vals.concat([1]))),bw=(W-L-R)/n,out='',i,hi=[];
  var sorted=vals.map(function(v,i){return[v,i]}).sort(function(a,b){return b[0]-a[0]}).slice(0,o.top||0).filter(function(p){return p[0]>0}).map(function(p){return p[1]});
  for(i=0;i<=2;i++){var y=T+(1-i/2)*(H-T-B);out+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="'+css('--line')+'"/><text x="'+(L-4)+'" y="'+(y+3)+'" text-anchor="end">'+Math.round(m*i/2)+'</text>'}
  vals.forEach(function(v,i){var h=v/m*(H-T-B);out+='<rect x="'+(L+i*bw+1)+'" y="'+(H-B-h)+'" width="'+Math.max(1,bw-2)+'" height="'+h+'" fill="'+css('--acc')+'" opacity="'+(v?(sorted.indexOf(i)>=0?1:.6):0)+'"/>';
   if(sorted.indexOf(i)>=0)out+='<text x="'+(L+i*bw+bw/2)+'" y="'+(H-B-h-3)+'" text-anchor="middle" style="fill:'+css('--fg')+'">'+v+'</text>'});
  var step=Math.ceil(n/8);labels.forEach(function(l,i){if(i%step==0)out+='<text x="'+(L+i*bw+bw/2)+'" y="'+(H-4)+'" text-anchor="middle">'+l+'</text>'});
- $(el).innerHTML=svg(W,H,out)}
+ $(el).innerHTML=svg(W,H,out);
+ hoverBars($(el).firstChild,{plot:{top:T,height:H-T-B},unit:o.unit||'new visits',bars:vals.map(function(v,i){return{x:L+i*bw,w:bw,v:v,title:(o.titles&&o.titles[i])||labels[i]}})})}
 function spark(pts,color){if(pts.length<2)return'';var a=pts.map(function(p){return p[1]}),lo=Math.min.apply(0,a),hi=Math.max.apply(0,a)||1;if(hi===lo)hi=lo+1;
  var x0=pts[0][0],x1=pts[pts.length-1][0]||1,d=pts.map(function(p,i){return(i?'L':'M')+((p[0]-x0)/(x1-x0||1)*100)+','+(28-(p[1]-lo)/(hi-lo)*24)}).join('');
  return '<svg viewBox="0 0 100 32" preserveAspectRatio="none"><path d="'+d+'" fill="none" stroke="'+color+'" stroke-width="1.4" vector-effect="non-scaling-stroke"/></svg>'}
 function tile(l,v,d,sp,big){return '<div class="t'+(big?' big':'')+'"><div class="l">'+l+'</div><div class="v">'+v+'</div><div class="d">'+(d||'')+'</div>'+(sp||'')+'</div>'}
 function delta(a,b,unit){var x=b-a;return x==0?'No change':'<span class="'+(x>0?'up':'')+'">'+(x>0?'▲ +':'▼ ')+x+'</span> '+(unit||'')}
 function render(){
+ hideTip();
  var all=D.s,now=Date.now(),cut=now-RH[RANGE]*MS,S=all.filter(function(r){return r[0]*1000>=cut});
  var base=all.filter(function(r){return r[0]*1000<cut}).pop();var Sx=base?[base].concat(S):S;
  if(!all.length){$('sub').textContent='No samples yet.';return}
  var last=all[all.length-1],m=D.meta||{},first=Sx[0]||last;
  $('sub').textContent='World version '+(m.version||'?')+' · updated '+(m.updated?new Date(m.updated).toLocaleDateString():'?')+' · '+all.length+' samples';
+ $('relog').hidden=m.players_ok!==false;$('rlform').hidden=PUB;
  var age=Math.round((now-last[0]*1000)/60000),ok=age<20&&!D.warning;
  $('pill').innerHTML='<span class="dot'+(ok?'':' bad')+'"></span>'+(ok?'Logging':'Not logging')+' · last sample '+(age<90?age+' min':Math.round(age/60)+' h')+' ago';
  $('warn').hidden=!D.warning;$('warn').textContent=D.warning||'';
@@ -126,22 +188,26 @@ function render(){
   +tile('Heat',last[4],delta(first[4],last[4]))
   +tile('Popularity',last[3],delta(first[3],last[3]))
   +tile('Capacity',m.capacity||'?','recommended '+(m.rec||'?'));
- line('c_visits',[{pts:T(1).map(function(p){return[p[0]*1000,p[1]]}),color:css('--acc'),area:1,nogap:1}]);
+ line('c_visits',[{pts:T(1).map(function(p){return[p[0]*1000,p[1]]}),color:css('--acc'),area:1,nogap:1,name:'Total visits'}]);
  /* new visits */
  var nv=[];for(var i=1;i<Sx.length;i++){var d=Sx[i][1]-Sx[i-1][1];if(d>0&&Sx[i][0]*1000>=cut)nv.push([Sx[i][0]*1000,d])}
  var daily=RH[RANGE]>168*1,bkMs=daily?864e5:MS;$('bk').textContent=daily?'day':'hour';
  var lo=Math.max(cut,S.length?S[0][0]*1000:now),hi=now,b0=Math.floor(lo/bkMs)*bkMs,nb=Math.min(400,Math.floor((hi-b0)/bkMs)+1),bv=[],bl=[];
- for(i=0;i<nb;i++){bv.push(0);var t=new Date(b0+i*bkMs);bl.push(daily?(t.getMonth()+1)+'/'+t.getDate():h12(t.getHours()))}
+ var bt=[];for(i=0;i<nb;i++){bv.push(0);var t=new Date(b0+i*bkMs);bl.push(daily?(t.getMonth()+1)+'/'+t.getDate():h12(t.getHours()));
+  bt.push(daily?t.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}):t.toLocaleString(undefined,{weekday:'short',month:'short',day:'numeric',hour:'numeric'}))}
  var hod=[],hm=[],r;for(i=0;i<24;i++)hod.push(0);for(i=0;i<7;i++){hm.push([]);for(var j=0;j<24;j++)hm[i].push(0)}
  nv.forEach(function(p){var k=Math.floor((p[0]-b0)/bkMs);if(k>=0&&k<nb)bv[k]+=p[1];var dt=new Date(p[0]);hod[dt.getHours()]+=p[1];hm[(dt.getDay()+6)%7][dt.getHours()]+=p[1]});
- bars('c_new',bl,bv);bars('c_hod',hod.map(function(_,h){return h12(h)}),hod,{top:3});
- line('c_pl',[{pts:S.map(function(r){return[r[0]*1000,pl(r)]}),color:css('--acc'),area:1}],{ymin:0,ymax:4});
- line('c_hp',[{pts:S.map(function(r){return[r[0]*1000,r[4]]}),color:css('--acc2'),step:1,nogap:1},{pts:S.map(function(r){return[r[0]*1000,r[3]]}),color:css('--acc'),step:1,nogap:1}],{ymin:0,ymax:4});
+ bars('c_new',bl,bv,{titles:bt});bars('c_hod',hod.map(function(_,h){return h12(h)}),hod,{top:3,titles:hod.map(function(_,h){return h12l(h)+' hour (all days)'})});
+ line('c_pl',[{pts:S.map(function(r){return[r[0]*1000,pl(r),r[5],r[6]]}),color:css('--acc'),area:1,name:'Players',fmt:function(p){return p[1]+' ('+p[2]+' public · '+p[3]+' private)'}}],{ymin:0,ymax:4});
+ line('c_hp',[{pts:S.map(function(r){return[r[0]*1000,r[4]]}),color:css('--acc2'),step:1,nogap:1,name:'Heat'},{pts:S.map(function(r){return[r[0]*1000,r[3]]}),color:css('--acc'),step:1,nogap:1,name:'Popularity'}],{ymin:0,ymax:4});
  /* heatmap */
  var mx=Math.max.apply(0,[].concat.apply([],hm).concat([1])),W=480,Lh=30,cw=(W-Lh-4)/24,ch=14,H=7*ch+22,out='',dn=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
- for(i=0;i<7;i++){out+='<text x="'+(Lh-4)+'" y="'+(i*ch+11)+'" text-anchor="end">'+dn[i]+'</text>';for(j=0;j<24;j++){var v=hm[i][j];out+='<rect x="'+(Lh+j*cw)+'" y="'+(i*ch)+'" width="'+(cw-1)+'" height="'+(ch-1)+'" rx="2" fill="'+(v?css('--acc'):css('--line'))+'" opacity="'+(v?(.25+.75*v/mx):.4)+'"/>'}}
+ for(i=0;i<7;i++){out+='<text x="'+(Lh-4)+'" y="'+(i*ch+11)+'" text-anchor="end">'+dn[i]+'</text>';for(j=0;j<24;j++){var v=hm[i][j];out+='<rect data-i="'+i+'" data-j="'+j+'" data-v="'+v+'" x="'+(Lh+j*cw)+'" y="'+(i*ch)+'" width="'+(cw-1)+'" height="'+(ch-1)+'" rx="2" fill="'+(v?css('--acc'):css('--line'))+'" opacity="'+(v?(.25+.75*v/mx):.4)+'"/>'}}
  for(j=0;j<24;j+=2)out+='<text x="'+(Lh+j*cw+cw/2)+'" y="'+(H-4)+'" text-anchor="middle">'+h12(j)+'</text>';
  $('c_hm').innerHTML=svg(W,H,out);
+ Array.prototype.forEach.call($('c_hm').querySelectorAll('rect[data-i]'),function(c){
+  c.addEventListener('mousemove',function(e){showTip('<div class="t">'+dn[+c.dataset.i]+' '+h12l(+c.dataset.j)+'</div>'+trow(null,'new visits',fmt(c.dataset.v)),e.clientX,e.clientY)});
+  c.addEventListener('mouseleave',hideTip)});
  $('dt').textContent='Data table ('+S.length+' samples in range)';
  $('rows').innerHTML=S.slice(-300).reverse().map(function(r){return'<tr><td>'+fdt(r[0]*1000)+'</td><td>'+fmt(r[1])+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td>'+r[4]+'</td><td>'+r[5]+'</td><td>'+r[6]+'</td></tr>'}).join('');
  $('foot').textContent='Collected every 5 minutes by this server from the VRChat API; history before this server started was added from an earlier log. All times are your local time. New visits are the change in total visits between consecutive samples, credited to the later one, so visits from a stretch with no samples appear in the first sample afterwards. The public copy of this page reloads its data from GitHub every minute (GitHub may delay it a few minutes).'}
@@ -167,5 +233,16 @@ $('scan').onclick=function(){var b=$('scan');b.disabled=true;b.textContent='Scan
  fetch('http://'+location.hostname+':8765/scan-world',{method:'POST'}).then(function(r){return r.text().then(function(t){if(!r.ok)throw new Error(t);return t})})
  .then(function(){b.textContent='Updated';load()}).catch(function(e){b.textContent=/^Wait/.test(e.message)?e.message:'Scan failed'})
  .then(function(){setTimeout(function(){b.disabled=false;b.textContent='Scan now'},4000)})};
+(function(){ /* relogin form (local copy only): talks to the Tailscale-only sign-in service */
+ var B='http://'+location.hostname+':8766',twofa=false;
+ $('rlb').onclick=function(){var b=$('rlb');b.disabled=true;$('rlm').textContent=' working...';
+  var body=twofa?{code:$('rlc').value}:{user:$('rlu').value,pass:$('rlp').value};
+  fetch(B+'/vrchat-login',{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)}).then(function(r){return r.text().then(function(t){return [r.status,t]})}).then(function(x){
+   if(x[0]===202){twofa=true;$('rlc').style.display='';$('rlm').textContent=' enter the code '+(x[1]==='2FA:email'?'emailed to you':'from your authenticator app')+' and press the button again';return}
+   $('rlm').textContent=' '+x[1];
+   if(x[0]===200){twofa=false;$('rlc').style.display='none';$('rlc').value='';$('rlu').value='';$('rlp').value='';$('rlm').textContent+=' - updating...';
+    fetch('http://'+location.hostname+':8765/scan-world',{method:'POST'}).then(function(){load()}).catch(function(){})}
+  }).catch(function(){$('rlm').textContent=' request failed'}).then(function(){b.disabled=false})};
+})();
 theme();buttons();load();setInterval(load,60e3);window.addEventListener('resize',function(){});
 </script></body></html>
