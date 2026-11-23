@@ -50,7 +50,7 @@ footer:before{content:"-- end of log --";display:block;margin-bottom:6px;opacity
 @media(prefers-reduced-motion:reduce){.dot{animation:none}}
 #tip{position:fixed;pointer-events:none;z-index:10;display:none;background:var(--card);color:var(--fg);border:1px solid var(--fg);padding:8px 10px;font:12px ui-monospace,"Cascadia Mono",Consolas,monospace;box-shadow:0 0 14px rgba(0,0,0,.45);max-width:90vw}
 #tip .t{font-weight:700;margin-bottom:4px;color:var(--mut)}#tip .r{display:flex;justify-content:space-between;gap:14px}#tip .sw{display:inline-block;width:10px;height:10px;margin-right:6px}
-.box svg:focus-visible{outline:1px dashed var(--fg)}</style></head><body><main>
+.box svg{touch-action:pan-y;-webkit-tap-highlight-color:transparent}.box svg:focus-visible{outline:1px dashed var(--fg)}</style></head><body><main>
 <header>
  <div><a class="home" href="../" style="color:var(--mut);font-size:.72rem;text-decoration:none;letter-spacing:.1em">&lt; HOME</a><h1 id="h1">World stats</h1><div class="sub" id="sub">Loading…</div></div>
  <div class="ctl"><select id="wsel" hidden style="background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px"></select><span class="pill" id="pill"></span><button id="scan">Scan now</button>
@@ -92,12 +92,18 @@ function fdt(t){var d=new Date(t);return d.toLocaleDateString(undefined,{month:'
 function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim()}
 function svg(w,h,inner){return '<svg viewBox="0 0 '+w+' '+h+'" width="100%" preserveAspectRatio="none" style="display:block">'+inner+'</svg>'}
 function nice(m){if(m<=0)return 1;var p=Math.pow(10,Math.floor(Math.log10(m))),f=m/p;return (f<=1?1:f<=2?2:f<=5?5:10)*p}
-/* ---- hover tooltips: one shared box; handlers are re-attached every time a chart is drawn ---- */
+/* ---- hover/touch tooltips: one shared box; pointer events cover mouse, finger and pen; handlers are re-attached every time a chart is drawn ---- */
 var tip=document.createElement('div');tip.id='tip';tip.setAttribute('role','status');tip.setAttribute('aria-live','polite');document.body.appendChild(tip);
-function showTip(html,cx,cy){tip.innerHTML=html;tip.style.display='block';var w=tip.offsetWidth,h=tip.offsetHeight,l=cx+14,t=cy+14;
- if(l+w>innerWidth-8)l=cx-w-14;if(t+h>innerHeight-8)t=cy-h-14;tip.style.left=Math.max(8,l)+'px';tip.style.top=Math.max(8,t)+'px'}
+var activeHide=null,activeSv=null;
+function showTip(html,cx,cy,up){tip.innerHTML=html;tip.style.display='block';var w=tip.offsetWidth,h=tip.offsetHeight,l,t;
+ if(up){l=cx-w/2;t=cy-h-28;if(t<8)t=cy+28}   /* touch: above the finger so it is not covered */
+ else{l=cx+14;t=cy+14;if(l+w>innerWidth-8)l=cx-w-14;if(t+h>innerHeight-8)t=cy-h-14}
+ l=Math.min(l,innerWidth-w-8);tip.style.left=Math.max(8,l)+'px';tip.style.top=Math.max(8,t)+'px'}
 function hideTip(){tip.style.display='none'}
-addEventListener('scroll',hideTip,{passive:true});
+function claim(sv,hide){if(activeHide&&activeHide!==hide)activeHide();activeHide=hide;activeSv=sv}   /* only one chart shows its marker at a time */
+addEventListener('scroll',function(){hideTip();if(activeHide)activeHide()},{passive:true});
+document.addEventListener('pointerdown',function(e){if(activeHide&&!(e.target&&e.target.closest&&e.target.closest('svg')===activeSv)){activeHide();activeHide=null}});   /* tap elsewhere closes it */
+function isTouch(e){return !!e&&e.pointerType&&e.pointerType!=='mouse'}
 function trow(c,n,v){return '<div class="r"><span>'+(c?'<i class="sw" style="background:'+c+'"></i>':'')+n+'</span><b>'+v+'</b></div>'}
 var NS='http://www.w3.org/2000/svg';
 function mk(tag,at,par){var e=document.createElementNS(NS,tag);for(var k in at)e.setAttribute(k,at[k]);par.appendChild(e);return e}
@@ -110,30 +116,34 @@ function hoverLine(sv,o){var P=o.series.filter(function(s){return s.pts.length})
  var pl=o.plot,cross=mk('line',{y1:pl.top,y2:pl.top+pl.height,stroke:css('--mut'),'stroke-width':1,'vector-effect':'non-scaling-stroke',visibility:'hidden'},sv),
   dots=P.map(function(s){return mk('ellipse',{fill:s.color,stroke:css('--bg'),'stroke-width':2,'vector-effect':'non-scaling-stroke',visibility:'hidden'},sv)}),
   hit=mk('rect',{x:pl.left,y:pl.top,width:pl.width,height:pl.height,fill:'transparent'},sv),cur=-1,pts0=P[0].pts;
- function show(i,cx,cy){cur=i;var t=pts0[i][0],x=o.xOf(t),m=sv.getScreenCTM(),html='<div class="t">'+ftime(t)+'</div>';
+ function hide(){cross.setAttribute('visibility','hidden');dots.forEach(function(d){d.setAttribute('visibility','hidden')});hideTip()}
+ function show(i,cx,cy,up){claim(sv,hide);cur=i;var t=pts0[i][0],x=o.xOf(t),m=sv.getScreenCTM(),html='<div class="t">'+ftime(t)+'</div>';
   cross.setAttribute('x1',x);cross.setAttribute('x2',x);cross.setAttribute('visibility','visible');
   P.forEach(function(s,k){var p=s.pts[nearestIdx(s.pts,t)];dots[k].setAttribute('cx',o.xOf(p[0]));dots[k].setAttribute('cy',o.yOf(p[1]));
    dots[k].setAttribute('rx',4/m.a);dots[k].setAttribute('ry',4/m.d);dots[k].setAttribute('visibility','visible');
    html+=trow(s.color,s.name||'Value',s.fmt?s.fmt(p):fmt(p[1]))});
   if(cx===undefined){var sc=toScreen(sv,x,o.yOf(pts0[i][1]));cx=sc.x;cy=sc.y}
-  showTip(html,cx,cy)}
- function hide(){cross.setAttribute('visibility','hidden');dots.forEach(function(d){d.setAttribute('visibility','hidden')});hideTip()}
- hit.addEventListener('mousemove',function(e){var l=toLocal(sv,e.clientX,e.clientY);show(nearestIdx(pts0,o.x0+(l.x-pl.left)/pl.width*(o.x1-o.x0)),e.clientX,e.clientY)});
- hit.addEventListener('mouseleave',hide);
+  showTip(html,cx,cy,up)}
+ function mv(e){var l=toLocal(sv,e.clientX,e.clientY);show(nearestIdx(pts0,o.x0+(l.x-pl.left)/pl.width*(o.x1-o.x0)),e.clientX,e.clientY,isTouch(e))}
+ hit.addEventListener('pointerdown',mv);hit.addEventListener('pointermove',mv);
+ hit.addEventListener('pointerleave',function(e){if(!isTouch(e))hide()});   /* a finger lifting keeps the tooltip until you tap elsewhere */
  sv.setAttribute('tabindex','0');
  sv.addEventListener('keydown',function(e){if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;e.preventDefault();
   show(Math.max(0,Math.min(pts0.length-1,cur<0?pts0.length-1:cur+(e.key==='ArrowRight'?1:-1))))});
  sv.addEventListener('blur',hide)}
-function hoverBars(sv,o){var pl=o.plot,wash=mk('rect',{y:pl.top,height:pl.height,fill:css('--fg'),opacity:.1,visibility:'hidden'},sv),cur=-1;
- function show(i,cx,cy){cur=i;var b=o.bars[i];wash.setAttribute('x',b.x);wash.setAttribute('width',b.w);wash.setAttribute('visibility','visible');
-  if(cx===undefined){var sc=toScreen(sv,b.x+b.w/2,pl.top+pl.height/2);cx=sc.x;cy=sc.y}
-  showTip('<div class="t">'+b.title+'</div>'+trow(null,o.unit,fmt(b.v)),cx,cy)}
+function hoverBars(sv,o){var pl=o.plot,n=o.bars.length;if(!n)return;
+ var wash=mk('rect',{y:pl.top,height:pl.height,fill:css('--fg'),opacity:.1,visibility:'hidden'},sv),cur=-1,b0=o.bars[0],
+  hit=mk('rect',{x:b0.x,y:pl.top,width:o.bars[n-1].x+o.bars[n-1].w-b0.x,height:pl.height,fill:'transparent'},sv);   /* one full-height target; the slot is worked out from the x position */
  function hide(){wash.setAttribute('visibility','hidden');hideTip()}
- o.bars.forEach(function(b,i){var h=mk('rect',{x:b.x,y:pl.top,width:b.w,height:pl.height,fill:'transparent'},sv);
-  h.addEventListener('mousemove',function(e){show(i,e.clientX,e.clientY)});h.addEventListener('mouseleave',hide)});
+ function show(i,cx,cy,up){claim(sv,hide);cur=i;var b=o.bars[i];wash.setAttribute('x',b.x);wash.setAttribute('width',b.w);wash.setAttribute('visibility','visible');
+  if(cx===undefined){var sc=toScreen(sv,b.x+b.w/2,pl.top+pl.height/2);cx=sc.x;cy=sc.y}
+  showTip('<div class="t">'+b.title+'</div>'+trow(null,o.unit,fmt(b.v)),cx,cy,up)}
+ function mv(e){var l=toLocal(sv,e.clientX,e.clientY);show(Math.max(0,Math.min(n-1,Math.floor((l.x-b0.x)/b0.w))),e.clientX,e.clientY,isTouch(e))}
+ hit.addEventListener('pointerdown',mv);hit.addEventListener('pointermove',mv);
+ hit.addEventListener('pointerleave',function(e){if(!isTouch(e))hide()});
  sv.setAttribute('tabindex','0');
  sv.addEventListener('keydown',function(e){if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;e.preventDefault();
-  show(Math.max(0,Math.min(o.bars.length-1,cur<0?o.bars.length-1:cur+(e.key==='ArrowRight'?1:-1))))});
+  show(Math.max(0,Math.min(n-1,cur<0?n-1:cur+(e.key==='ArrowRight'?1:-1))))});
  sv.addEventListener('blur',hide)}
 /* line chart: series=[{pts:[[t,y]],color,area,step,name,fmt}] */
 function line(el,series,o){o=o||{};var W=480,H=o.h||170,L=34,R=8,T=8,B=20,all=[],i,s;
@@ -206,8 +216,9 @@ function render(){
  for(j=0;j<24;j+=2)out+='<text x="'+(Lh+j*cw+cw/2)+'" y="'+(H-4)+'" text-anchor="middle">'+h12(j)+'</text>';
  $('c_hm').innerHTML=svg(W,H,out);
  Array.prototype.forEach.call($('c_hm').querySelectorAll('rect[data-i]'),function(c){
-  c.addEventListener('mousemove',function(e){showTip('<div class="t">'+dn[+c.dataset.i]+' '+h12l(+c.dataset.j)+'</div>'+trow(null,'new visits',fmt(c.dataset.v)),e.clientX,e.clientY)});
-  c.addEventListener('mouseleave',hideTip)});
+  var sh=function(e){claim($('c_hm').firstChild,hideTip);showTip('<div class="t">'+dn[+c.dataset.i]+' '+h12l(+c.dataset.j)+'</div>'+trow(null,'new visits',fmt(c.dataset.v)),e.clientX,e.clientY,isTouch(e))};
+  c.addEventListener('pointerdown',sh);c.addEventListener('pointermove',sh);
+  c.addEventListener('pointerleave',function(e){if(!isTouch(e))hideTip()})});
  $('dt').textContent='Data table ('+S.length+' samples in range)';
  $('rows').innerHTML=S.slice(-300).reverse().map(function(r){return'<tr><td>'+fdt(r[0]*1000)+'</td><td>'+fmt(r[1])+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td>'+r[4]+'</td><td>'+r[5]+'</td><td>'+r[6]+'</td></tr>'}).join('');
  $('foot').textContent='Collected every 5 minutes by this server from the VRChat API; history before this server started was added from an earlier log. All times are your local time. New visits are the change in total visits between consecutive samples, credited to the later one, so visits from a stretch with no samples appear in the first sample afterwards. The public copy of this page reloads its data from GitHub every minute (GitHub may delay it a few minutes).'}
