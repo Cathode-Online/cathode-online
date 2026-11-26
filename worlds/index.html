@@ -45,6 +45,7 @@ button:hover{background:var(--fg);color:var(--bg)}
 .t .v{text-shadow:0 0 10px currentColor;letter-spacing:.04em}
 .dot{border-radius:0;animation:bl 1.2s steps(2) infinite}@keyframes bl{50%{opacity:.25}}
 #warn{background:transparent;color:#ff4d2e;border:1px solid #ff4d2e;text-transform:uppercase}
+#stage{display:inline-block;margin:6px 0 2px;padding:4px 10px;border:1px solid var(--mut);color:var(--mut);font-weight:700;font-size:.78rem;text-transform:uppercase;letter-spacing:.08em}#stage[hidden]{display:none}#stage.labs{border-color:var(--acc);color:var(--acc)}#stage.approved{border-color:var(--good);color:var(--good)}
 #relog{color:#ff4d2e;border:1px solid #ff4d2e;padding:12px;margin-bottom:12px}#relog input{background:var(--card);color:var(--fg);border:1px solid var(--line);padding:6px;font:inherit}#relog small{color:var(--mut)}
 footer:before{content:"-- end of log --";display:block;margin-bottom:6px;opacity:.6}
 @media(prefers-reduced-motion:reduce){.dot{animation:none}}
@@ -52,7 +53,7 @@ footer:before{content:"-- end of log --";display:block;margin-bottom:6px;opacity
 #tip .t{font-weight:700;margin-bottom:4px;color:var(--mut)}#tip .r{display:flex;justify-content:space-between;gap:14px}#tip .sw{display:inline-block;width:10px;height:10px;margin-right:6px}
 .box svg{touch-action:pan-y;-webkit-tap-highlight-color:transparent}.box svg:focus-visible{outline:1px dashed var(--fg)}</style></head><body><main>
 <header>
- <div><a class="home" href="../" style="color:var(--mut);font-size:.72rem;text-decoration:none;letter-spacing:.1em">&lt; HOME</a><h1 id="h1">World stats</h1><div class="sub" id="sub">Loading…</div></div>
+ <div><a class="home" href="../" style="color:var(--mut);font-size:.72rem;text-decoration:none;letter-spacing:.1em">&lt; HOME</a><h1 id="h1">World stats</h1><div id="stage" hidden></div><div class="sub" id="sub">Loading…</div></div>
  <div class="ctl"><select id="wsel" hidden style="background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:5px"></select><span class="pill" id="pill"></span><button id="scan">Scan now</button>
   <span id="rng"></span><button id="th">Theme: auto</button></div>
 </header>
@@ -185,6 +186,9 @@ function render(){
  var last=all[all.length-1],m=D.meta||{},first=Sx[0]||last;
  $('sub').textContent='World version '+(m.version||'?')+' · updated '+(m.updated?new Date(m.updated).toLocaleDateString():'?')+' · '+all.length+' samples';
  $('relog').hidden=m.players_ok!==false;$('rlform').hidden=PUB;
+ var day=function(s){var d=new Date(s);return !s||s==='none'||isNaN(d)?'':d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})};
+ var stg={labs:['Community Labs · not yet approved',day(m.labs_date),'in Labs since '],approved:['Approved · out of Community Labs',day(m.pub_date),'public since '],private:['Private · not published','','']}[m.stage];
+ $('stage').hidden=!stg;if(stg){$('stage').className=m.stage;$('stage').textContent=stg[0]+(stg[1]?' · '+stg[2]+stg[1]:'')}
  var age=Math.round((now-last[0]*1000)/60000),ok=age<20&&!D.warning;
  $('pill').innerHTML='<span class="dot'+(ok?'':' bad')+'"></span>'+(ok?'Logging':'Not logging')+' · last sample '+(age<90?age+' min':Math.round(age/60)+' h')+' ago';
  $('warn').hidden=!D.warning;$('warn').textContent=D.warning||'';
